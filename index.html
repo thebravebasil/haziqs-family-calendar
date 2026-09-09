@@ -166,7 +166,7 @@ import {
   getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
 import {
-  getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc,
+  getFirestore, collection, doc, getDoc, setDoc, addDoc,
   updateDoc, deleteDoc, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
 
@@ -190,6 +190,13 @@ const ALLOWED_EMAILS = [
 
 const CALENDAR_NAME = "Haziq's Family";
 const PALETTE = ['#E8A33D','#D46A6A','#7FA98D','#6E8FB0','#9673A6','#C9A227','#5FB0A0','#C97B4A'];
+const FAMILY_MEMBERS = [
+  { id: 'nayel',   name: 'Nayel',   color: PALETTE[0] },
+  { id: 'haziq',   name: 'Haziq',   color: PALETTE[1] },
+  { id: 'sultana', name: 'Sultana', color: PALETTE[2] },
+  { id: 'ezzah',   name: 'Ezzah',   color: PALETTE[3] },
+  { id: 'basil',   name: 'Basil',   color: PALETTE[4] }
+];
 const WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const FULL_WEEKDAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -272,6 +279,11 @@ function formatTime12h(t){
   var h12 = h % 12; if(h12 === 0) h12 = 12;
   return h12 + ':' + min + ' ' + ampm;
 }
+function eventTimeLabel(ev){
+  if(ev.allDay) return '';
+  if(!ev.time) return '';
+  return ev.endTime ? formatTime12h(ev.time) + ' \u2013 ' + formatTime12h(ev.endTime) : formatTime12h(ev.time);
+}
 function recurrenceLabel(rec){
   if(!rec || !rec.freq || rec.freq === 'none') return 'Does not repeat';
   var interval = rec.interval && rec.interval > 0 ? rec.interval : 1;
@@ -297,7 +309,7 @@ onAuthStateChanged(auth, function(user){
   state.authError = null;
   state.user = user;
   if(user){
-    ensurePersonDoc(user).then(startListeners);
+    ensureFamilyRoster().then(startListeners);
   } else {
     if(unsubPeople) unsubPeople();
     if(unsubEvents) unsubEvents();
@@ -308,20 +320,14 @@ onAuthStateChanged(auth, function(user){
   render();
 });
 
-function ensurePersonDoc(user){
-  var ref = doc(db, 'people', user.uid);
-  return getDoc(ref).then(function(snap){
-    if(snap.exists()) return;
-    return getDocs(collection(db, 'people')).then(function(all){
-      var color = PALETTE[all.size % PALETTE.length];
-      return setDoc(ref, {
-        email: user.email,
-        name: user.displayName || user.email,
-        photoURL: user.photoURL || '',
-        color: color
-      });
+function ensureFamilyRoster(){
+  return Promise.all(FAMILY_MEMBERS.map(function(member){
+    var ref = doc(db, 'people', member.id);
+    return getDoc(ref).then(function(snap){
+      if(snap.exists()) return;
+      return setDoc(ref, { name: member.name, color: member.color });
     });
-  });
+  }));
 }
 
 function startListeners(){
@@ -403,7 +409,6 @@ function renderCalendarApp(){
   wrap.style.flex = '1';
 
   var people = state.people;
-  var me = personById(state.user.uid);
 
   var topbar = document.createElement('div');
   topbar.className = 'topbar';
@@ -478,7 +483,7 @@ function renderCalendarApp(){
       var chip = document.createElement('div');
       chip.className = 'event-chip';
       var dotsHtml = (ev.personIds||[]).map(function(pid){ var p = personById(pid); return p ? '<span class="dot" style="background:'+p.color+'"></span>' : ''; }).join('');
-      var timeStr = ev.allDay ? '' : (ev.time ? esc(ev.time)+' &middot; ' : '');
+      var timeStr = ev.allDay ? '' : (ev.time ? esc(formatTime12h(ev.time))+' &middot; ' : '');
       chip.innerHTML = '<span class="dots">'+dotsHtml+'</span><span>'+timeStr+esc(ev.title)+'</span>';
       chip.addEventListener('click', (function(evObj){ return function(e){ e.stopPropagation(); openViewModal(ds, evObj); }; })(ev));
       dayEvents.appendChild(chip);
@@ -543,7 +548,7 @@ function buildViewModal(modal, ds, ev){
     '<h3 class="modal-title" style="margin-bottom:6px;">'+esc(ev.title)+'</h3>' +
     '<p style="font-size:14.5px;color:var(--ink-dim);margin:0 0 22px;">' +
       esc(formatLongDate(ds)) +
-      (ev.allDay ? ' &middot; All day' : (ev.time ? ' &middot; ' + esc(formatTime12h(ev.time)) : '')) +
+      (ev.allDay ? ' &middot; All day' : (ev.time ? ' &middot; ' + esc(eventTimeLabel(ev)) : '')) +
     '</p>' +
     '<label class="field-label">Who\'s this for</label>' +
     '<div class="person-pill-row" style="margin-bottom:20px;">' + (peopleHtml || '<span style="color:var(--ink-faint);font-size:13.5px;">No one tagged</span>') + '</div>' +
@@ -579,7 +584,7 @@ function buildDayModal(modal, ds){
     row.style.marginBottom = '8px'; row.style.cursor = 'pointer';
     row.style.background = 'rgba(244,241,232,0.06)'; row.style.color = 'var(--ink)';
     var dotsHtml = (ev.personIds||[]).map(function(pid){ var p = personById(pid); return p ? '<span class="dot" style="background:'+p.color+'"></span>' : ''; }).join('');
-    row.innerHTML = '<span class="dots">'+dotsHtml+'</span><span>'+(ev.allDay?'':esc(ev.time||'')+' &middot; ')+esc(ev.title)+'</span>';
+    row.innerHTML = '<span class="dots">'+dotsHtml+'</span><span>'+(ev.allDay?'':esc(eventTimeLabel(ev))+' &middot; ')+esc(ev.title)+'</span>';
     row.addEventListener('click', function(){ openViewModal(ds, ev); });
     list.appendChild(row);
   });
@@ -594,23 +599,21 @@ function buildDayModal(modal, ds){
 
 function buildPeopleModal(modal){
   modal.innerHTML = '<h3 class="modal-title">Family on this calendar</h3>' +
-    '<p style="font-size:13px;color:var(--ink-dim);margin:-10px 0 18px;line-height:1.5;">Access is controlled by the Google account allow-list, not from here. Everyone below has signed in at least once.</p>';
+    '<p style="font-size:13px;color:var(--ink-dim);margin:-10px 0 18px;line-height:1.5;">These are the five names events can be tagged with. Anyone signed in can update a color.</p>';
   var list = document.createElement('div');
-  state.people.forEach(function(p){
+  FAMILY_MEMBERS.forEach(function(member){
+    var p = personById(member.id) || member;
     var row = document.createElement('div');
     row.className = 'person-row';
-    var isMe = p.id === state.user.uid;
     row.innerHTML = '<span style="display:flex;align-items:center;gap:9px;font-size:14px;">' +
-      (p.photoURL ? '<img src="'+esc(p.photoURL)+'" style="width:26px;height:26px;border-radius:50%;">' : '<span class="dot" style="background:'+p.color+';width:14px;height:14px;"></span>') +
-      esc(p.name) + (isMe ? ' <span style="color:var(--ink-faint);font-size:12px;">(you)</span>' : '') +
+      '<span class="dot" style="background:'+p.color+';width:14px;height:14px;"></span>' +
+      esc(p.name) +
     '</span>';
-    if(isMe){
-      var editBtn = document.createElement('button');
-      editBtn.className = 'btn'; editBtn.style.padding = '6px 12px'; editBtn.style.fontSize = '12.5px';
-      editBtn.textContent = 'Change my color';
-      editBtn.addEventListener('click', function(){ state.modal = { type: 'color' }; render(); });
-      row.appendChild(editBtn);
-    }
+    var editBtn = document.createElement('button');
+    editBtn.className = 'btn'; editBtn.style.padding = '6px 12px'; editBtn.style.fontSize = '12.5px';
+    editBtn.textContent = 'Edit color';
+    editBtn.addEventListener('click', function(){ state.modal = { type: 'color', personId: member.id }; render(); });
+    row.appendChild(editBtn);
     list.appendChild(row);
   });
   modal.appendChild(list);
@@ -622,11 +625,13 @@ function buildPeopleModal(modal){
 }
 
 function buildColorModal(modal){
-  var me = personById(state.user.uid);
-  modal.innerHTML = '<h3 class="modal-title">Pick your color</h3>';
+  var personId = state.modal.personId;
+  var p = personById(personId);
+  var member = FAMILY_MEMBERS.filter(function(m){ return m.id === personId; })[0];
+  modal.innerHTML = '<h3 class="modal-title">Color for '+esc(p ? p.name : (member ? member.name : ''))+'</h3>';
   var swatchRow = document.createElement('div');
   swatchRow.className = 'swatch-row';
-  var chosen = me ? me.color : PALETTE[0];
+  var chosen = p ? p.color : PALETTE[0];
   PALETTE.forEach(function(color){
     var sw = document.createElement('div');
     sw.className = 'swatch' + (color === chosen ? ' selected' : '');
@@ -645,7 +650,7 @@ function buildColorModal(modal){
   modal.appendChild(actions);
   actions.querySelector('#cm-back').addEventListener('click', openPeopleModal);
   actions.querySelector('#cm-save').addEventListener('click', function(){
-    updateDoc(doc(db, 'people', state.user.uid), { color: chosen }).then(function(){ openPeopleModal(); });
+    updateDoc(doc(db, 'people', personId), { color: chosen }).then(function(){ openPeopleModal(); });
   });
 }
 
@@ -661,6 +666,10 @@ function buildEventModal(modal, ds, existing){
     '<div class="row-2">' +
       '<div><label class="field-label">Date</label><input class="field" id="em-date" type="date"></div>' +
       '<div><label class="field-label">Time</label><input class="field" id="em-time" type="time"></div>' +
+    '</div>' +
+    '<div class="row-2" id="em-endtime-wrap">' +
+      '<div></div>' +
+      '<div><label class="field-label">End time (optional)</label><input class="field" id="em-endtime" type="time"></div>' +
     '</div>' +
     '<div class="checkbox-row"><input type="checkbox" id="em-allday"><label for="em-allday">All day</label></div>' +
     '<label class="field-label">Who\'s this for</label>' +
@@ -687,6 +696,7 @@ function buildEventModal(modal, ds, existing){
   form.querySelector('#em-title').value = isEdit ? existing.title : '';
   form.querySelector('#em-date').value = isEdit ? existing.date : ds;
   form.querySelector('#em-time').value = isEdit ? (existing.time || '') : '';
+  form.querySelector('#em-endtime').value = isEdit ? (existing.endTime || '') : '';
   form.querySelector('#em-allday').checked = isEdit ? !!existing.allDay : true;
   form.querySelector('#em-notes').value = isEdit ? (existing.notes || '') : '';
   var recFreq = isEdit && existing.recurrence ? existing.recurrence.freq : 'none';
@@ -695,15 +705,20 @@ function buildEventModal(modal, ds, existing){
   form.querySelector('#em-until').value = isEdit && existing.recurrence ? (existing.recurrence.until || '') : '';
 
   var timeField = form.querySelector('#em-time');
-  timeField.style.display = form.querySelector('#em-allday').checked ? 'none' : 'block';
-  form.querySelector('#em-allday').addEventListener('change', function(e){ timeField.style.display = e.target.checked ? 'none' : 'block'; });
+  var endTimeWrap = form.querySelector('#em-endtime-wrap');
+  function syncTimeVisibility(hidden){
+    timeField.style.display = hidden ? 'none' : 'block';
+    endTimeWrap.style.display = hidden ? 'none' : 'grid';
+  }
+  syncTimeVisibility(form.querySelector('#em-allday').checked);
+  form.querySelector('#em-allday').addEventListener('change', function(e){ syncTimeVisibility(e.target.checked); });
 
   var recExtra = form.querySelector('#em-rec-extra');
   recExtra.style.display = recFreq === 'none' ? 'none' : 'block';
   form.querySelector('#em-freq').addEventListener('change', function(e){ recExtra.style.display = e.target.value === 'none' ? 'none' : 'block'; });
 
   var pillsWrap = form.querySelector('#em-people');
-  var selected = isEdit ? (existing.personIds || []).slice() : [state.user.uid];
+  var selected = isEdit ? (existing.personIds || []).slice() : [];
   people.forEach(function(p){
     var pill = document.createElement('div');
     pill.className = 'person-pill' + (selected.indexOf(p.id) > -1 ? ' selected' : '');
@@ -740,13 +755,19 @@ function buildEventModal(modal, ds, existing){
     if(!t || !dt){ errEl.textContent = 'Add a title and a date.'; errEl.style.display = 'block'; return; }
     var ad = form.querySelector('#em-allday').checked;
     var tm = form.querySelector('#em-time').value;
+    var etm = form.querySelector('#em-endtime').value;
+    if(!ad && tm && etm && etm <= tm){
+      errEl.textContent = 'End time should be after the start time.';
+      errEl.style.display = 'block';
+      return;
+    }
     var nt = form.querySelector('#em-notes').value.trim();
     var freq = form.querySelector('#em-freq').value;
     var interval = parseInt(form.querySelector('#em-interval').value, 10) || 1;
     var until = form.querySelector('#em-until').value || null;
 
     var evObj = {
-      title: t, date: dt, allDay: ad, time: ad ? '' : tm, notes: nt,
+      title: t, date: dt, allDay: ad, time: ad ? '' : tm, endTime: ad ? '' : etm, notes: nt,
       personIds: selected,
       recurrence: freq === 'none' ? { freq: 'none' } : { freq: freq, interval: interval, until: until },
       createdBy: state.user.uid
