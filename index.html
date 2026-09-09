@@ -500,6 +500,7 @@ function renderModal(){
   overlay.appendChild(modal);
   if(state.modal.type === 'day') buildDayModal(modal, state.modal.date);
   else if(state.modal.type === 'people') buildPeopleModal(modal);
+  else if(state.modal.type === 'color') buildColorModal(modal);
   else buildEventModal(modal, state.modal.date, state.modal.event);
   return overlay;
 }
@@ -555,10 +556,6 @@ function buildPeopleModal(modal){
   closeRow.innerHTML = '<div></div><button class="btn" id="pm-close">Close</button>';
   modal.appendChild(closeRow);
   closeRow.querySelector('#pm-close').addEventListener('click', closeModal);
-
-  if(state.modal.type === 'color'){
-    buildColorModal(modal);
-  }
 }
 
 function buildColorModal(modal){
