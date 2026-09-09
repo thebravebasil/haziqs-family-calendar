@@ -191,6 +191,7 @@ const ALLOWED_EMAILS = [
 const CALENDAR_NAME = "Haziq's Family";
 const PALETTE = ['#E8A33D','#D46A6A','#7FA98D','#6E8FB0','#9673A6','#C9A227','#5FB0A0','#C97B4A'];
 const WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const FULL_WEEKDAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 const fbApp = initializeApp(firebaseConfig);
@@ -258,6 +259,30 @@ function expandOccurrences(ev, rangeStart, rangeEnd){
 }
 
 function personById(id){ for(var i=0;i<state.people.length;i++) if(state.people[i].id === id) return state.people[i]; return null; }
+
+function formatLongDate(ds){
+  var d = parseISO(ds);
+  return FULL_WEEKDAYS[d.getUTCDay()] + ', ' + MONTHS[d.getUTCMonth()] + ' ' + d.getUTCDate() + ', ' + d.getUTCFullYear();
+}
+function formatTime12h(t){
+  if(!t) return '';
+  var parts = t.split(':');
+  var h = parseInt(parts[0],10), min = parts[1];
+  var ampm = h >= 12 ? 'PM' : 'AM';
+  var h12 = h % 12; if(h12 === 0) h12 = 12;
+  return h12 + ':' + min + ' ' + ampm;
+}
+function recurrenceLabel(rec){
+  if(!rec || !rec.freq || rec.freq === 'none') return 'Does not repeat';
+  var interval = rec.interval && rec.interval > 0 ? rec.interval : 1;
+  var unitNames = { daily: 'day', weekly: 'week', monthly: 'month', yearly: 'year' };
+  var unit = unitNames[rec.freq] || rec.freq;
+  var label;
+  if(interval === 1) label = 'Repeats every ' + unit;
+  else label = 'Repeats every ' + interval + ' ' + unit + 's';
+  if(rec.until) label += ', until ' + formatLongDate(rec.until);
+  return label;
+}
 
 // ---------------- Auth ----------------
 onAuthStateChanged(auth, function(user){
@@ -455,7 +480,7 @@ function renderCalendarApp(){
       var dotsHtml = (ev.personIds||[]).map(function(pid){ var p = personById(pid); return p ? '<span class="dot" style="background:'+p.color+'"></span>' : ''; }).join('');
       var timeStr = ev.allDay ? '' : (ev.time ? esc(ev.time)+' &middot; ' : '');
       chip.innerHTML = '<span class="dots">'+dotsHtml+'</span><span>'+timeStr+esc(ev.title)+'</span>';
-      chip.addEventListener('click', (function(evObj){ return function(e){ e.stopPropagation(); openEventModal(ds, evObj); }; })(ev));
+      chip.addEventListener('click', (function(evObj){ return function(e){ e.stopPropagation(); openViewModal(ds, evObj); }; })(ev));
       dayEvents.appendChild(chip);
     });
     if(evs.length > maxChipsVisible){
@@ -487,6 +512,7 @@ function renderCalendarApp(){
 }
 
 function openDayModal(ds){ state.modal = { type: 'day', date: ds }; render(); }
+function openViewModal(ds, ev){ state.modal = { type: 'view', date: ds, event: ev }; render(); }
 function openEventModal(ds, existingEvent){ state.modal = { type: 'event', date: ds, event: existingEvent }; render(); }
 function openPeopleModal(){ state.modal = { type: 'people' }; render(); }
 function closeModal(){ state.modal = null; render(); }
@@ -501,8 +527,45 @@ function renderModal(){
   if(state.modal.type === 'day') buildDayModal(modal, state.modal.date);
   else if(state.modal.type === 'people') buildPeopleModal(modal);
   else if(state.modal.type === 'color') buildColorModal(modal);
+  else if(state.modal.type === 'view') buildViewModal(modal, state.modal.date, state.modal.event);
   else buildEventModal(modal, state.modal.date, state.modal.event);
   return overlay;
+}
+
+function buildViewModal(modal, ds, ev){
+  var peopleHtml = (ev.personIds||[]).map(function(pid){
+    var p = personById(pid);
+    if(!p) return '';
+    return '<span class="person-pill" style="cursor:default;"><span class="dot" style="background:'+p.color+'"></span>'+esc(p.name)+'</span>';
+  }).join('');
+
+  modal.innerHTML =
+    '<h3 class="modal-title" style="margin-bottom:6px;">'+esc(ev.title)+'</h3>' +
+    '<p style="font-size:14.5px;color:var(--ink-dim);margin:0 0 22px;">' +
+      esc(formatLongDate(ds)) +
+      (ev.allDay ? ' &middot; All day' : (ev.time ? ' &middot; ' + esc(formatTime12h(ev.time)) : '')) +
+    '</p>' +
+    '<label class="field-label">Who\'s this for</label>' +
+    '<div class="person-pill-row" style="margin-bottom:20px;">' + (peopleHtml || '<span style="color:var(--ink-faint);font-size:13.5px;">No one tagged</span>') + '</div>' +
+    '<label class="field-label">Repeats</label>' +
+    '<p style="font-size:14.5px;margin:0 0 20px;color:var(--ink);">'+esc(recurrenceLabel(ev.recurrence))+'</p>' +
+    (ev.notes ? '<label class="field-label">Notes</label><p style="font-size:14.5px;margin:0 0 4px;color:var(--ink);white-space:pre-wrap;line-height:1.5;">'+esc(ev.notes)+'</p>' : '');
+
+  var actions = document.createElement('div');
+  actions.className = 'modal-actions';
+  actions.innerHTML = '<button class="btn btn-danger" id="vm-delete">Delete</button><div class="modal-actions-right"><button class="btn" id="vm-close">Close</button><button class="btn btn-primary" id="vm-edit">Edit</button></div>';
+  modal.appendChild(actions);
+
+  actions.querySelector('#vm-close').addEventListener('click', closeModal);
+  actions.querySelector('#vm-edit').addEventListener('click', function(){ openEventModal(ds, ev); });
+  actions.querySelector('#vm-delete').addEventListener('click', function(){
+    if(confirm('Delete this event?')){
+      if(ev.recurrence && ev.recurrence.freq !== 'none'){
+        if(!confirm('This repeats. Delete the whole series? Click Cancel to keep it.')) return;
+      }
+      deleteDoc(doc(db, 'events', ev.id)).then(closeModal);
+    }
+  });
 }
 
 function buildDayModal(modal, ds){
@@ -517,7 +580,7 @@ function buildDayModal(modal, ds){
     row.style.background = 'rgba(244,241,232,0.06)'; row.style.color = 'var(--ink)';
     var dotsHtml = (ev.personIds||[]).map(function(pid){ var p = personById(pid); return p ? '<span class="dot" style="background:'+p.color+'"></span>' : ''; }).join('');
     row.innerHTML = '<span class="dots">'+dotsHtml+'</span><span>'+(ev.allDay?'':esc(ev.time||'')+' &middot; ')+esc(ev.title)+'</span>';
-    row.addEventListener('click', function(){ openEventModal(ds, ev); });
+    row.addEventListener('click', function(){ openViewModal(ds, ev); });
     list.appendChild(row);
   });
   modal.appendChild(list);
