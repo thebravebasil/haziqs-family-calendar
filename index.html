@@ -166,7 +166,7 @@ import {
   getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
 import {
-  getFirestore, collection, doc, getDoc, setDoc, addDoc,
+  getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc,
   updateDoc, deleteDoc, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
 
@@ -284,6 +284,18 @@ function eventTimeLabel(ev){
   if(!ev.time) return '';
   return ev.endTime ? formatTime12h(ev.time) + ' \u2013 ' + formatTime12h(ev.endTime) : formatTime12h(ev.time);
 }
+function formatTime12hCompact(t){
+  if(!t) return '';
+  var parts = t.split(':');
+  var h = parseInt(parts[0],10), min = parts[1];
+  var ampm = h >= 12 ? 'p' : 'a';
+  var h12 = h % 12; if(h12 === 0) h12 = 12;
+  return min === '00' ? (h12 + ampm) : (h12 + ':' + min + ampm);
+}
+function eventTimeLabelCompact(ev){
+  if(ev.allDay || !ev.time) return '';
+  return ev.endTime ? formatTime12hCompact(ev.time) + '\u2013' + formatTime12hCompact(ev.endTime) : formatTime12hCompact(ev.time);
+}
 function recurrenceLabel(rec){
   if(!rec || !rec.freq || rec.freq === 'none') return 'Does not repeat';
   var interval = rec.interval && rec.interval > 0 ? rec.interval : 1;
@@ -321,13 +333,24 @@ onAuthStateChanged(auth, function(user){
 });
 
 function ensureFamilyRoster(){
-  return Promise.all(FAMILY_MEMBERS.map(function(member){
-    var ref = doc(db, 'people', member.id);
-    return getDoc(ref).then(function(snap){
-      if(snap.exists()) return;
-      return setDoc(ref, { name: member.name, color: member.color });
+  var validIds = FAMILY_MEMBERS.map(function(m){ return m.id; });
+  return getDocs(collection(db, 'people')).then(function(snap){
+    var cleanupOps = [];
+    snap.forEach(function(d){
+      if(validIds.indexOf(d.id) === -1){
+        cleanupOps.push(deleteDoc(doc(db, 'people', d.id)));
+      }
     });
-  }));
+    return Promise.all(cleanupOps);
+  }).then(function(){
+    return Promise.all(FAMILY_MEMBERS.map(function(member){
+      var ref = doc(db, 'people', member.id);
+      return getDoc(ref).then(function(snap){
+        if(snap.exists()) return;
+        return setDoc(ref, { name: member.name, color: member.color });
+      });
+    }));
+  });
 }
 
 function startListeners(){
@@ -483,7 +506,7 @@ function renderCalendarApp(){
       var chip = document.createElement('div');
       chip.className = 'event-chip';
       var dotsHtml = (ev.personIds||[]).map(function(pid){ var p = personById(pid); return p ? '<span class="dot" style="background:'+p.color+'"></span>' : ''; }).join('');
-      var timeStr = ev.allDay ? '' : (ev.time ? esc(formatTime12h(ev.time))+' &middot; ' : '');
+      var timeStr = ev.allDay ? '' : (ev.time ? esc(eventTimeLabelCompact(ev))+' &middot; ' : '');
       chip.innerHTML = '<span class="dots">'+dotsHtml+'</span><span>'+timeStr+esc(ev.title)+'</span>';
       chip.addEventListener('click', (function(evObj){ return function(e){ e.stopPropagation(); openViewModal(ds, evObj); }; })(ev));
       dayEvents.appendChild(chip);
