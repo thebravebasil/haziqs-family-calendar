@@ -1,1 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Haziq's Family — Calendar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #14172B;
+    --panel: #1B2040;
+    --panel-2: #232A4E;
+    --border: rgba(244,241,232,0.10);
+    --border-strong: rgba(244,241,232,0.22);
+    --paper: #F6EFDD;
+    --paper-dim: #EAE1C9;
+    --ink: #F4F1E8;
+    --ink-dim: rgba(244,241,232,0.62);
+    --ink-faint: rgba(244,241,232,0.38);
+    --paper-ink: #262A45;
+    --paper-ink-dim: rgba(38,42,69,0.6);
+    --amber: #E8A33D;
+    --amber-ink: #2A1D08;
+    --danger: #D46A6A;
+    --radius-lg: 20px;
+    --radius-md: 12px;
+    --radius-sm: 8px;
+    --serif: 'Fraunces', Georgia, serif;
+    --sans: 'Archivo', -apple-system, sans-serif;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    min-height:100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  #app{ min-height:100vh; display:flex; flex-direction:column; }
 
+  button{ font-family: var(--sans); cursor:pointer; }
+  input, select{ font-family: var(--sans); }
+
+  .btn{
+    background: transparent;
+    border: 1px solid var(--border-strong);
+    color: var(--ink);
+    border-radius: var(--radius-sm);
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background .15s ease, transform .1s ease;
+  }
+  .btn:hover{ background: rgba(244,241,232,0.06); }
+  .btn:active{ transform: scale(0.98); }
+  .btn-primary{ background: var(--amber); border-color: var(--amber); color: var(--amber-ink); }
+  .btn-primary:hover{ background: #edb257; }
+  .btn-danger{ border-color: rgba(212,106,106,0.5); color: #f0a8a8; }
+  .btn-danger:hover{ background: rgba(212,106,106,0.12); }
+  .btn-icon{ width:38px; height:38px; padding:0; display:flex; align-items:center; justify-content:center; border-radius:50%; font-size:18px; line-height:1; }
+  .btn-google{
+    display:flex; align-items:center; justify-content:center; gap:10px; width:100%;
+    background: var(--ink); color: #1a1a1a; border: none; border-radius: var(--radius-sm);
+    padding: 13px; font-size:15px; font-weight:600;
+  }
+  .btn-google:hover{ background: #e8e5db; }
+  .btn-google svg{ width:18px; height:18px; }
+
+  /* ---------- Gate screens ---------- */
+  .gate-wrap{ flex:1; display:flex; align-items:center; justify-content:center; padding: 32px 20px; }
+  .gate-card{ width:100%; max-width: 440px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 40px 36px; text-align:center; }
+  .gate-eyebrow{ font-size:13px; color: var(--amber); font-weight:600; margin: 0 0 6px; }
+  .gate-title{ font-family: var(--serif); font-size: 32px; font-weight:600; margin: 0 0 10px; line-height:1.15; }
+  .gate-sub{ font-size:14px; color: var(--ink-dim); line-height:1.55; margin: 0 0 28px; }
+  .gate-error{ color: #f0a8a8; font-size:13.5px; margin: 18px 0 4px; line-height:1.5; }
+  .gate-foot{ font-size:12.5px; color: var(--ink-faint); margin-top:22px; line-height:1.5; }
+  .avatar-lockup{ display:flex; align-items:center; gap:12px; justify-content:center; margin-bottom:18px; }
+  .avatar-lockup img{ width:44px; height:44px; border-radius:50%; }
+
+  /* ---------- Header ---------- */
+  .topbar{ display:flex; align-items:center; justify-content:space-between; gap:16px; padding: 18px 28px; border-bottom: 1px solid var(--border); flex-wrap:wrap; }
+  .brand-title{ font-family: var(--serif); font-size:22px; font-weight:600; margin:0; }
+  .topbar-actions{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .legend{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-right: 6px; }
+  .legend-item{ display:flex; align-items:center; gap:6px; font-size:13px; color: var(--ink-dim); }
+  .me-chip{ display:flex; align-items:center; gap:7px; font-size:13px; color: var(--ink-dim); padding-right:4px; }
+  .me-chip img{ width:24px; height:24px; border-radius:50%; }
+
+  /* ---------- Month nav ---------- */
+  .month-nav{ display:flex; align-items:center; justify-content:space-between; gap:16px; padding: 22px 28px 8px; }
+  .month-title{ font-family: var(--serif); font-size:34px; font-weight:600; margin:0; }
+  .month-nav-controls{ display:flex; align-items:center; gap:8px; }
+
+  /* ---------- Calendar grid ---------- */
+  .cal-wrap{ flex:1; padding: 12px 28px 28px; }
+  .weekday-row{ display:grid; grid-template-columns: repeat(7, 1fr); gap:10px; margin-bottom:10px; }
+  .weekday{ font-size:13px; color: var(--ink-faint); font-weight:600; padding-left:4px; }
+  .grid{ display:grid; grid-template-columns: repeat(7, 1fr); gap:10px; }
+  .day-cell{ background: var(--paper); border-radius: var(--radius-md); min-height: 118px; padding: 10px 10px 8px; display:flex; flex-direction:column; gap:6px; cursor:pointer; transition: box-shadow .12s ease; }
+  .day-cell:hover{ box-shadow: 0 0 0 2px var(--amber) inset; }
+  .day-cell.out-of-month{ background: rgba(246,239,221,0.35); }
+  .day-cell.out-of-month .day-num{ color: rgba(38,42,69,0.35); }
+  .day-num{ font-family: var(--serif); font-size:20px; font-weight:600; color: var(--paper-ink); }
+  .day-num.today{ background: var(--amber); color: var(--amber-ink); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; }
+  .day-events{ display:flex; flex-direction:column; gap:4px; overflow:hidden; }
+  .event-chip{ display:flex; align-items:center; gap:6px; background: rgba(38,42,69,0.06); border-radius:6px; padding: 3px 6px; font-size:12px; color: var(--paper-ink); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .event-chip .dots{ display:flex; gap:2px; flex-shrink:0; }
+  .event-chip .dots .dot{ width:7px; height:7px; }
+  .event-more{ font-size:11.5px; color: var(--paper-ink-dim); padding-left:6px; }
+  .dot{ width:10px; height:10px; border-radius:50%; flex-shrink:0; display:inline-block; }
+
+  /* ---------- TV mode ---------- */
+  #app.tv-mode .topbar-actions .hide-tv{ display:none; }
+  #app.tv-mode .month-title{ font-size: 52px; }
+  #app.tv-mode .brand-title{ font-size: 30px; }
+  #app.tv-mode .weekday{ font-size:17px; }
+  #app.tv-mode .day-cell{ min-height: 160px; padding:14px; }
+  #app.tv-mode .day-num{ font-size:26px; }
+  #app.tv-mode .day-num.today{ width:40px; height:40px; font-size:20px; }
+  #app.tv-mode .event-chip{ font-size:15px; padding:5px 8px; }
+  #app.tv-mode .event-chip .dots .dot{ width:9px; height:9px; }
+  #app.tv-mode .cal-wrap{ padding: 16px 40px 40px; }
+  #app.tv-mode .month-nav{ padding: 30px 40px 12px; }
+  #app.tv-mode .topbar{ padding: 22px 40px; }
+
+  /* ---------- Modal ---------- */
+  .overlay{ position:fixed; inset:0; background: rgba(10,11,22,0.7); display:flex; align-items:center; justify-content:center; padding:20px; z-index:50; }
+  .modal{ background: var(--panel); border:1px solid var(--border); border-radius: var(--radius-lg); width:100%; max-width:480px; max-height:88vh; overflow-y:auto; padding: 30px 30px 26px; }
+  .modal-title{ font-family: var(--serif); font-size:24px; font-weight:600; margin:0 0 20px; }
+  .field-label{ display:block; font-size:13px; color: var(--ink-dim); margin: 0 0 6px; font-weight:500; }
+  .field{ width:100%; background: rgba(244,241,232,0.05); border:1px solid var(--border-strong); color: var(--ink); border-radius: var(--radius-sm); padding: 11px 13px; font-size:15px; margin-bottom:18px; }
+  .field:focus{ outline:none; border-color: var(--amber); }
+  textarea.field{ resize:vertical; min-height:64px; font-family:var(--sans); }
+  .row-2{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+  .checkbox-row{ display:flex; align-items:center; gap:8px; margin-bottom:18px; }
+  .checkbox-row input{ width:16px; height:16px; }
+  .checkbox-row label{ font-size:14px; color: var(--ink-dim); }
+  .person-pill-row{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px; }
+  .person-pill{ display:flex; align-items:center; gap:7px; padding:8px 13px; border-radius:999px; border:1px solid var(--border-strong); background: rgba(244,241,232,0.04); font-size:14px; cursor:pointer; }
+  .person-pill.selected{ border-color: var(--amber); background: rgba(232,163,61,0.14); }
+  .swatch-row{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px; }
+  .swatch{ width:32px; height:32px; border-radius:50%; border: 2px solid transparent; cursor:pointer; }
+  .swatch.selected{ border-color: var(--ink); }
+  .modal-actions{ display:flex; justify-content:space-between; align-items:center; margin-top: 22px; gap:10px; }
+  .modal-actions-right{ display:flex; gap:10px; }
+  .person-row{ display:flex; align-items:center; justify-content:space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+
+  @media (max-width: 720px){
+    .month-title{ font-size:26px; }
+    .day-cell{ min-height: 80px; padding:7px; }
+    .day-num{ font-size:15px; }
+    .event-chip{ font-size:10.5px; }
+    .cal-wrap, .topbar, .month-nav{ padding-left:14px; padding-right:14px; }
+    .legend{ display:none; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+import {
+  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+import {
+  getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc,
+  updateDoc, deleteDoc, onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
+
+// ---- Your Firebase project ----
+const firebaseConfig = {
+  apiKey: "AIzaSyA2YuZ0vpnDYpjldoAt0JMvdCZIV2h_GNo",
+  authDomain: "haziqs-family-calendar.firebaseapp.com",
+  projectId: "haziqs-family-calendar",
+  storageBucket: "haziqs-family-calendar.firebasestorage.app",
+  messagingSenderId: "32259063345",
+  appId: "1:32259063345:web:71f632dcf07213f9a5df10"
+};
+
+// Only these emails are allowed in. This must match the Firestore security rules.
+const ALLOWED_EMAILS = [
+  "md.haziq@gmail.com",
+  "sultanakhan.08@gmail.com",
+  "mobasil2023@gmail.com",
+  "ezzahsul03@gmail.com"
+];
+
+const CALENDAR_NAME = "Haziq's Family";
+const PALETTE = ['#E8A33D','#D46A6A','#7FA98D','#6E8FB0','#9673A6','#C9A227','#5FB0A0','#C97B4A'];
+const WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+const fbApp = initializeApp(firebaseConfig);
+const auth = getAuth(fbApp);
+const db = getFirestore(fbApp);
+const googleProvider = new GoogleAuthProvider();
+
+var state = {
+  authLoading: true,
+  authError: null,
+  user: null,            // firebase auth user
+  people: [],            // [{id(uid), email, name, color, photoURL}]
+  events: [],            // [{id, title, date, allDay, time, notes, personIds, recurrence, createdBy}]
+  dataLoaded: false,
+  viewDate: new Date(),
+  tvMode: false,
+  modal: null
+};
+
+var app = document.getElementById('app');
+var unsubPeople = null, unsubEvents = null;
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+function esc(s){ var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+
+// ---- date helpers (UTC-based) ----
+function toUTCDate(y,m,d){ return new Date(Date.UTC(y, m-1, d)); }
+function parseISO(str){ var p = str.split('-'); return toUTCDate(parseInt(p[0],10), parseInt(p[1],10), parseInt(p[2],10)); }
+function pad(n){ return n < 10 ? '0'+n : ''+n; }
+function dateStrOf(d){ return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate()); }
+function addDays(d,n){ var r = new Date(d.getTime()); r.setUTCDate(r.getUTCDate()+n); return r; }
+function addMonths(d,n){
+  var day = d.getUTCDate();
+  var r = new Date(d.getTime());
+  r.setUTCDate(1); r.setUTCMonth(r.getUTCMonth()+n);
+  var lastDay = new Date(Date.UTC(r.getUTCFullYear(), r.getUTCMonth()+1, 0)).getUTCDate();
+  r.setUTCDate(Math.min(day, lastDay));
+  return r;
+}
+function addYears(d,n){ return addMonths(d, n*12); }
+function todayStr(){ var t = new Date(); return t.getFullYear()+'-'+pad(t.getMonth()+1)+'-'+pad(t.getDate()); }
+
+function expandOccurrences(ev, rangeStart, rangeEnd){
+  var base = parseISO(ev.date);
+  var rec = ev.recurrence || { freq: 'none' };
+  var results = [];
+  if(!rec.freq || rec.freq === 'none'){
+    if(base >= rangeStart && base <= rangeEnd) results.push(dateStrOf(base));
+    return results;
+  }
+  var interval = rec.interval && rec.interval > 0 ? rec.interval : 1;
+  var until = rec.until ? parseISO(rec.until) : null;
+  var cur = base, safety = 0;
+  while(cur <= rangeEnd && safety < 1000){
+    if(until && cur > until) break;
+    if(cur >= rangeStart && cur <= rangeEnd) results.push(dateStrOf(cur));
+    if(rec.freq === 'daily') cur = addDays(cur, interval);
+    else if(rec.freq === 'weekly') cur = addDays(cur, interval*7);
+    else if(rec.freq === 'monthly') cur = addMonths(cur, interval);
+    else if(rec.freq === 'yearly') cur = addYears(cur, interval);
+    else break;
+    safety++;
+  }
+  return results;
+}
+
+function personById(id){ for(var i=0;i<state.people.length;i++) if(state.people[i].id === id) return state.people[i]; return null; }
+
+// ---------------- Auth ----------------
+onAuthStateChanged(auth, function(user){
+  state.authLoading = false;
+  if(user && ALLOWED_EMAILS.indexOf(user.email) === -1){
+    state.authError = "This calendar is private to " + CALENDAR_NAME + ". The Google account " + user.email + " isn't on the list.";
+    signOut(auth);
+    state.user = null;
+    render();
+    return;
+  }
+  state.authError = null;
+  state.user = user;
+  if(user){
+    ensurePersonDoc(user).then(startListeners);
+  } else {
+    if(unsubPeople) unsubPeople();
+    if(unsubEvents) unsubEvents();
+    state.people = [];
+    state.events = [];
+    state.dataLoaded = false;
+  }
+  render();
+});
+
+function ensurePersonDoc(user){
+  var ref = doc(db, 'people', user.uid);
+  return getDoc(ref).then(function(snap){
+    if(snap.exists()) return;
+    return getDocs(collection(db, 'people')).then(function(all){
+      var color = PALETTE[all.size % PALETTE.length];
+      return setDoc(ref, {
+        email: user.email,
+        name: user.displayName || user.email,
+        photoURL: user.photoURL || '',
+        color: color
+      });
+    });
+  });
+}
+
+function startListeners(){
+  if(unsubPeople) unsubPeople();
+  if(unsubEvents) unsubEvents();
+  unsubPeople = onSnapshot(collection(db, 'people'), function(snap){
+    state.people = snap.docs.map(function(d){ var v = d.data(); v.id = d.id; return v; });
+    if(!state.modal) render();
+  });
+  unsubEvents = onSnapshot(collection(db, 'events'), function(snap){
+    state.events = snap.docs.map(function(d){ var v = d.data(); v.id = d.id; return v; });
+    state.dataLoaded = true;
+    if(!state.modal) render();
+  });
+}
+
+function doSignIn(){
+  state.authError = null;
+  signInWithPopup(auth, googleProvider).catch(function(err){
+    state.authError = "Sign-in didn't go through (" + (err && err.code ? err.code : 'unknown error') + "). Try again.";
+    render();
+  });
+}
+function doSignOut(){ signOut(auth); }
+
+// ---------------- Rendering ----------------
+function render(){
+  app.className = state.tvMode ? 'tv-mode' : '';
+  app.innerHTML = '';
+
+  if(state.authLoading){
+    app.appendChild(renderCentered('Loading…'));
+    return;
+  }
+  if(!state.user){
+    app.appendChild(renderSignInGate());
+    return;
+  }
+  if(!state.dataLoaded){
+    app.appendChild(renderCentered('Loading the calendar…'));
+    return;
+  }
+  app.appendChild(renderCalendarApp());
+  if(state.modal) app.appendChild(renderModal());
+}
+
+function renderCentered(text){
+  var d = document.createElement('div');
+  d.className = 'gate-wrap';
+  d.innerHTML = '<p style="color:var(--ink-dim);font-size:15px;">'+esc(text)+'</p>';
+  return d;
+}
+
+function renderSignInGate(){
+  var wrap = document.createElement('div');
+  wrap.className = 'gate-wrap';
+  var card = document.createElement('div');
+  card.className = 'gate-card';
+  card.innerHTML =
+    '<p class="gate-eyebrow">Private calendar</p>' +
+    '<h1 class="gate-title">'+esc(CALENDAR_NAME)+'</h1>' +
+    '<p class="gate-sub">Sign in with the Google account your family added to the guest list.</p>' +
+    '<button class="btn-google" id="g-signin">' +
+      '<svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.9 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34.6 5.1 29.6 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21 21-9.4 21-21c0-1.2-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.5 18.9 13 24 13c3.1 0 5.8 1.1 8 3l6-6C34.6 6.1 29.6 4 24 4c-7.5 0-14 4.1-17.7 10.2z"/><path fill="#4CAF50" d="M24 45c5.5 0 10.4-1.9 14.2-5.1l-6.6-5.6c-2 1.5-4.6 2.4-7.6 2.4-5.3 0-9.7-3.1-11.3-7.5l-6.6 5C9.9 40.8 16.4 45 24 45z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.2 5.7l6.6 5.6C40.9 36.4 45 30.7 45 24c0-1.2-.1-2.4-.4-3.5z"/></svg>' +
+      'Sign in with Google' +
+    '</button>' +
+    (state.authError ? '<p class="gate-error">'+esc(state.authError)+'</p>' : '') +
+    '<p class="gate-foot">Only Google accounts on the family list can view or edit this calendar.</p>';
+  wrap.appendChild(card);
+  card.querySelector('#g-signin').addEventListener('click', doSignIn);
+  return wrap;
+}
+
+// ---------- Main calendar app ----------
+function renderCalendarApp(){
+  var wrap = document.createElement('div');
+  wrap.style.display = 'flex';
+  wrap.style.flexDirection = 'column';
+  wrap.style.flex = '1';
+
+  var people = state.people;
+  var me = personById(state.user.uid);
+
+  var topbar = document.createElement('div');
+  topbar.className = 'topbar';
+  var legendHtml = people.map(function(p){
+    return '<span class="legend-item"><span class="dot" style="background:'+p.color+'"></span>'+esc(p.name)+'</span>';
+  }).join('');
+  topbar.innerHTML =
+    '<div class="brand"><p class="brand-title">'+esc(CALENDAR_NAME)+'</p></div>' +
+    '<div class="topbar-actions">' +
+      '<div class="legend hide-tv">'+legendHtml+'</div>' +
+      '<button class="btn hide-tv" id="btn-people">Family</button>' +
+      '<button class="btn btn-primary hide-tv" id="btn-add">+ Add event</button>' +
+      '<button class="btn" id="btn-tv">'+(state.tvMode ? 'Exit TV mode' : 'TV mode')+'</button>' +
+      '<button class="btn hide-tv" id="btn-signout">Sign out</button>' +
+    '</div>';
+  wrap.appendChild(topbar);
+
+  var y = state.viewDate.getUTCFullYear ? state.viewDate.getUTCFullYear() : state.viewDate.getFullYear();
+  var m = state.viewDate.getUTCMonth ? state.viewDate.getUTCMonth() : state.viewDate.getMonth();
+  var monthNav = document.createElement('div');
+  monthNav.className = 'month-nav';
+  monthNav.innerHTML =
+    '<h2 class="month-title">'+MONTHS[m]+' '+y+'</h2>' +
+    '<div class="month-nav-controls hide-tv">' +
+      '<button class="btn btn-icon" id="btn-prev">&#8249;</button>' +
+      '<button class="btn" id="btn-today">Today</button>' +
+      '<button class="btn btn-icon" id="btn-next">&#8250;</button>' +
+    '</div>';
+  wrap.appendChild(monthNav);
+
+  var calWrap = document.createElement('div');
+  calWrap.className = 'cal-wrap';
+  var weekdayRow = document.createElement('div');
+  weekdayRow.className = 'weekday-row';
+  WEEKDAYS.forEach(function(w){
+    var el = document.createElement('div'); el.className = 'weekday'; el.textContent = w; weekdayRow.appendChild(el);
+  });
+  calWrap.appendChild(weekdayRow);
+
+  var firstOfMonth = toUTCDate(y, m+1, 1);
+  var startWeekday = firstOfMonth.getUTCDay();
+  var gridStart = addDays(firstOfMonth, -startWeekday);
+  var daysInMonth = new Date(Date.UTC(y, m+1, 0)).getUTCDate();
+  var totalCells = Math.ceil((startWeekday + daysInMonth) / 7) * 7;
+  var monthEndForExpand = addDays(gridStart, totalCells - 1);
+
+  var occByDate = {};
+  state.events.forEach(function(ev){
+    expandOccurrences(ev, gridStart, monthEndForExpand).forEach(function(ds){
+      if(!occByDate[ds]) occByDate[ds] = [];
+      occByDate[ds].push(ev);
+    });
+  });
+
+  var grid = document.createElement('div');
+  grid.className = 'grid';
+  var tStr = todayStr();
+  var maxChipsVisible = state.tvMode ? 4 : 3;
+
+  for(var i=0;i<totalCells;i++){
+    var cellDate = addDays(gridStart, i);
+    var ds = dateStrOf(cellDate);
+    var inMonth = cellDate.getUTCMonth() === m;
+    var cell = document.createElement('div');
+    cell.className = 'day-cell' + (inMonth ? '' : ' out-of-month');
+    cell.innerHTML = ds === tStr ? '<span class="day-num today">'+cellDate.getUTCDate()+'</span>' : '<span class="day-num">'+cellDate.getUTCDate()+'</span>';
+
+    var dayEvents = document.createElement('div');
+    dayEvents.className = 'day-events';
+    var evs = occByDate[ds] || [];
+    evs.slice(0, maxChipsVisible).forEach(function(ev){
+      var chip = document.createElement('div');
+      chip.className = 'event-chip';
+      var dotsHtml = (ev.personIds||[]).map(function(pid){ var p = personById(pid); return p ? '<span class="dot" style="background:'+p.color+'"></span>' : ''; }).join('');
+      var timeStr = ev.allDay ? '' : (ev.time ? esc(ev.time)+' &middot; ' : '');
+      chip.innerHTML = '<span class="dots">'+dotsHtml+'</span><span>'+timeStr+esc(ev.title)+'</span>';
+      chip.addEventListener('click', (function(evObj){ return function(e){ e.stopPropagation(); openEventModal(ds, evObj); }; })(ev));
+      dayEvents.appendChild(chip);
+    });
+    if(evs.length > maxChipsVisible){
+      var more = document.createElement('div');
+      more.className = 'event-more';
+      more.textContent = '+' + (evs.length - maxChipsVisible) + ' more';
+      more.addEventListener('click', (function(dsv){ return function(e){ e.stopPropagation(); openDayModal(dsv); }; })(ds));
+      dayEvents.appendChild(more);
+    }
+    cell.appendChild(dayEvents);
+    cell.addEventListener('click', (function(dsv){ return function(){ openEventModal(dsv, null); }; })(ds));
+    grid.appendChild(cell);
+  }
+  calWrap.appendChild(grid);
+  wrap.appendChild(calWrap);
+
+  setTimeout(function(){
+    var b;
+    if((b = topbar.querySelector('#btn-add'))) b.addEventListener('click', function(){ openEventModal(tStr, null); });
+    if((b = topbar.querySelector('#btn-people'))) b.addEventListener('click', openPeopleModal);
+    if((b = topbar.querySelector('#btn-tv'))) b.addEventListener('click', function(){ state.tvMode = !state.tvMode; render(); });
+    if((b = topbar.querySelector('#btn-signout'))) b.addEventListener('click', doSignOut);
+    if((b = monthNav.querySelector('#btn-prev'))) b.addEventListener('click', function(){ state.viewDate = addMonths(toUTCDate(y,m+1,1), -1); render(); });
+    if((b = monthNav.querySelector('#btn-next'))) b.addEventListener('click', function(){ state.viewDate = addMonths(toUTCDate(y,m+1,1), 1); render(); });
+    if((b = monthNav.querySelector('#btn-today'))) b.addEventListener('click', function(){ state.viewDate = new Date(); render(); });
+  }, 0);
+
+  return wrap;
+}
+
+function openDayModal(ds){ state.modal = { type: 'day', date: ds }; render(); }
+function openEventModal(ds, existingEvent){ state.modal = { type: 'event', date: ds, event: existingEvent }; render(); }
+function openPeopleModal(){ state.modal = { type: 'people' }; render(); }
+function closeModal(){ state.modal = null; render(); }
+
+function renderModal(){
+  var overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.addEventListener('click', function(e){ if(e.target === overlay) closeModal(); });
+  var modal = document.createElement('div');
+  modal.className = 'modal';
+  overlay.appendChild(modal);
+  if(state.modal.type === 'day') buildDayModal(modal, state.modal.date);
+  else if(state.modal.type === 'people') buildPeopleModal(modal);
+  else buildEventModal(modal, state.modal.date, state.modal.event);
+  return overlay;
+}
+
+function buildDayModal(modal, ds){
+  var d = parseISO(ds);
+  var evs = state.events.filter(function(ev){ return expandOccurrences(ev, d, d).length > 0; });
+  modal.innerHTML = '<h3 class="modal-title">'+MONTHS[d.getUTCMonth()]+' '+d.getUTCDate()+'</h3>';
+  var list = document.createElement('div');
+  evs.forEach(function(ev){
+    var row = document.createElement('div');
+    row.className = 'event-chip';
+    row.style.marginBottom = '8px'; row.style.cursor = 'pointer';
+    row.style.background = 'rgba(244,241,232,0.06)'; row.style.color = 'var(--ink)';
+    var dotsHtml = (ev.personIds||[]).map(function(pid){ var p = personById(pid); return p ? '<span class="dot" style="background:'+p.color+'"></span>' : ''; }).join('');
+    row.innerHTML = '<span class="dots">'+dotsHtml+'</span><span>'+(ev.allDay?'':esc(ev.time||'')+' &middot; ')+esc(ev.title)+'</span>';
+    row.addEventListener('click', function(){ openEventModal(ds, ev); });
+    list.appendChild(row);
+  });
+  modal.appendChild(list);
+  var actions = document.createElement('div');
+  actions.className = 'modal-actions';
+  actions.innerHTML = '<button class="btn btn-primary" id="dm-add">+ Add event</button><button class="btn" id="dm-close">Close</button>';
+  modal.appendChild(actions);
+  modal.querySelector('#dm-add').addEventListener('click', function(){ openEventModal(ds, null); });
+  modal.querySelector('#dm-close').addEventListener('click', closeModal);
+}
+
+function buildPeopleModal(modal){
+  modal.innerHTML = '<h3 class="modal-title">Family on this calendar</h3>' +
+    '<p style="font-size:13px;color:var(--ink-dim);margin:-10px 0 18px;line-height:1.5;">Access is controlled by the Google account allow-list, not from here. Everyone below has signed in at least once.</p>';
+  var list = document.createElement('div');
+  state.people.forEach(function(p){
+    var row = document.createElement('div');
+    row.className = 'person-row';
+    var isMe = p.id === state.user.uid;
+    row.innerHTML = '<span style="display:flex;align-items:center;gap:9px;font-size:14px;">' +
+      (p.photoURL ? '<img src="'+esc(p.photoURL)+'" style="width:26px;height:26px;border-radius:50%;">' : '<span class="dot" style="background:'+p.color+';width:14px;height:14px;"></span>') +
+      esc(p.name) + (isMe ? ' <span style="color:var(--ink-faint);font-size:12px;">(you)</span>' : '') +
+    '</span>';
+    if(isMe){
+      var editBtn = document.createElement('button');
+      editBtn.className = 'btn'; editBtn.style.padding = '6px 12px'; editBtn.style.fontSize = '12.5px';
+      editBtn.textContent = 'Change my color';
+      editBtn.addEventListener('click', function(){ state.modal = { type: 'color' }; render(); });
+      row.appendChild(editBtn);
+    }
+    list.appendChild(row);
+  });
+  modal.appendChild(list);
+  var closeRow = document.createElement('div');
+  closeRow.className = 'modal-actions';
+  closeRow.innerHTML = '<div></div><button class="btn" id="pm-close">Close</button>';
+  modal.appendChild(closeRow);
+  closeRow.querySelector('#pm-close').addEventListener('click', closeModal);
+
+  if(state.modal.type === 'color'){
+    buildColorModal(modal);
+  }
+}
+
+function buildColorModal(modal){
+  var me = personById(state.user.uid);
+  modal.innerHTML = '<h3 class="modal-title">Pick your color</h3>';
+  var swatchRow = document.createElement('div');
+  swatchRow.className = 'swatch-row';
+  var chosen = me ? me.color : PALETTE[0];
+  PALETTE.forEach(function(color){
+    var sw = document.createElement('div');
+    sw.className = 'swatch' + (color === chosen ? ' selected' : '');
+    sw.style.background = color;
+    sw.addEventListener('click', function(){
+      chosen = color;
+      Array.prototype.forEach.call(swatchRow.children, function(c){ c.classList.remove('selected'); });
+      sw.classList.add('selected');
+    });
+    swatchRow.appendChild(sw);
+  });
+  modal.appendChild(swatchRow);
+  var actions = document.createElement('div');
+  actions.className = 'modal-actions';
+  actions.innerHTML = '<button class="btn" id="cm-back">Back</button><button class="btn btn-primary" id="cm-save">Save</button>';
+  modal.appendChild(actions);
+  actions.querySelector('#cm-back').addEventListener('click', openPeopleModal);
+  actions.querySelector('#cm-save').addEventListener('click', function(){
+    updateDoc(doc(db, 'people', state.user.uid), { color: chosen }).then(function(){ openPeopleModal(); });
+  });
+}
+
+function buildEventModal(modal, ds, existing){
+  var people = state.people;
+  var isEdit = !!existing;
+  modal.innerHTML = '<h3 class="modal-title">'+(isEdit ? 'Edit event' : 'New event')+'</h3>';
+
+  var form = document.createElement('div');
+  form.innerHTML =
+    '<label class="field-label">Title</label>' +
+    '<input class="field" id="em-title" placeholder="What\'s happening?">' +
+    '<div class="row-2">' +
+      '<div><label class="field-label">Date</label><input class="field" id="em-date" type="date"></div>' +
+      '<div><label class="field-label">Time</label><input class="field" id="em-time" type="time"></div>' +
+    '</div>' +
+    '<div class="checkbox-row"><input type="checkbox" id="em-allday"><label for="em-allday">All day</label></div>' +
+    '<label class="field-label">Who\'s this for</label>' +
+    '<div class="person-pill-row" id="em-people"></div>' +
+    '<label class="field-label">Repeats</label>' +
+    '<select class="field" id="em-freq">' +
+      '<option value="none">Does not repeat</option>' +
+      '<option value="daily">Daily</option>' +
+      '<option value="weekly">Weekly</option>' +
+      '<option value="monthly">Monthly</option>' +
+      '<option value="yearly">Yearly</option>' +
+    '</select>' +
+    '<div id="em-rec-extra" style="display:none;">' +
+      '<div class="row-2">' +
+        '<div><label class="field-label">Every</label><input class="field" id="em-interval" type="number" min="1" value="1"></div>' +
+        '<div><label class="field-label">Until (optional)</label><input class="field" id="em-until" type="date"></div>' +
+      '</div>' +
+    '</div>' +
+    '<label class="field-label">Notes</label>' +
+    '<textarea class="field" id="em-notes" placeholder="Any details..."></textarea>' +
+    '<div id="em-error" class="gate-error" style="display:none;"></div>';
+  modal.appendChild(form);
+
+  form.querySelector('#em-title').value = isEdit ? existing.title : '';
+  form.querySelector('#em-date').value = isEdit ? existing.date : ds;
+  form.querySelector('#em-time').value = isEdit ? (existing.time || '') : '';
+  form.querySelector('#em-allday').checked = isEdit ? !!existing.allDay : true;
+  form.querySelector('#em-notes').value = isEdit ? (existing.notes || '') : '';
+  var recFreq = isEdit && existing.recurrence ? existing.recurrence.freq : 'none';
+  form.querySelector('#em-freq').value = recFreq;
+  form.querySelector('#em-interval').value = isEdit && existing.recurrence ? (existing.recurrence.interval || 1) : 1;
+  form.querySelector('#em-until').value = isEdit && existing.recurrence ? (existing.recurrence.until || '') : '';
+
+  var timeField = form.querySelector('#em-time');
+  timeField.style.display = form.querySelector('#em-allday').checked ? 'none' : 'block';
+  form.querySelector('#em-allday').addEventListener('change', function(e){ timeField.style.display = e.target.checked ? 'none' : 'block'; });
+
+  var recExtra = form.querySelector('#em-rec-extra');
+  recExtra.style.display = recFreq === 'none' ? 'none' : 'block';
+  form.querySelector('#em-freq').addEventListener('change', function(e){ recExtra.style.display = e.target.value === 'none' ? 'none' : 'block'; });
+
+  var pillsWrap = form.querySelector('#em-people');
+  var selected = isEdit ? (existing.personIds || []).slice() : [state.user.uid];
+  people.forEach(function(p){
+    var pill = document.createElement('div');
+    pill.className = 'person-pill' + (selected.indexOf(p.id) > -1 ? ' selected' : '');
+    pill.innerHTML = '<span class="dot" style="background:'+p.color+'"></span>'+esc(p.name);
+    pill.addEventListener('click', function(){
+      var idx = selected.indexOf(p.id);
+      if(idx > -1) selected.splice(idx,1); else selected.push(p.id);
+      pill.classList.toggle('selected');
+    });
+    pillsWrap.appendChild(pill);
+  });
+
+  var actions = document.createElement('div');
+  actions.className = 'modal-actions';
+  var leftHtml = isEdit ? '<button class="btn btn-danger" id="em-delete">Delete</button>' : '<span></span>';
+  actions.innerHTML = leftHtml + '<div class="modal-actions-right"><button class="btn" id="em-cancel">Cancel</button><button class="btn btn-primary" id="em-save">Save</button></div>';
+  modal.appendChild(actions);
+
+  if(isEdit){
+    actions.querySelector('#em-delete').addEventListener('click', function(){
+      if(confirm('Delete this event?')){
+        if(existing.recurrence && existing.recurrence.freq !== 'none'){
+          if(!confirm('This repeats. Delete the whole series? Click Cancel to keep it.')) return;
+        }
+        deleteDoc(doc(db, 'events', existing.id)).then(closeModal);
+      }
+    });
+  }
+  actions.querySelector('#em-cancel').addEventListener('click', closeModal);
+  actions.querySelector('#em-save').addEventListener('click', function(){
+    var errEl = form.querySelector('#em-error');
+    var t = form.querySelector('#em-title').value.trim();
+    var dt = form.querySelector('#em-date').value;
+    if(!t || !dt){ errEl.textContent = 'Add a title and a date.'; errEl.style.display = 'block'; return; }
+    var ad = form.querySelector('#em-allday').checked;
+    var tm = form.querySelector('#em-time').value;
+    var nt = form.querySelector('#em-notes').value.trim();
+    var freq = form.querySelector('#em-freq').value;
+    var interval = parseInt(form.querySelector('#em-interval').value, 10) || 1;
+    var until = form.querySelector('#em-until').value || null;
+
+    var evObj = {
+      title: t, date: dt, allDay: ad, time: ad ? '' : tm, notes: nt,
+      personIds: selected,
+      recurrence: freq === 'none' ? { freq: 'none' } : { freq: freq, interval: interval, until: until },
+      createdBy: state.user.uid
+    };
+
+    var p = isEdit ? updateDoc(doc(db, 'events', existing.id), evObj) : addDoc(collection(db, 'events'), evObj);
+    p.then(closeModal).catch(function(err){
+      errEl.textContent = "Couldn't save (" + (err && err.code ? err.code : 'error') + "). Try again.";
+      errEl.style.display = 'block';
+    });
+  });
+}
+
+render();
+</script>
+</body>
+</html>
