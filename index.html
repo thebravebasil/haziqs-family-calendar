@@ -95,10 +95,10 @@
   .view-switch button + button{ border-left:1px solid var(--border-strong); }
 
   /* ---------- Calendar grid ---------- */
-  .cal-wrap{ flex:1; padding: 12px 28px 28px; min-width:0; }
-  .weekday-row{ display:grid; grid-template-columns: repeat(7, 1fr); gap:10px; margin-bottom:10px; }
-  .weekday{ font-size:13px; color: var(--ink-faint); font-weight:600; padding-left:4px; }
-  .grid{ display:grid; grid-template-columns: repeat(7, 1fr); gap:10px; }
+  .cal-wrap{ flex:1; padding: 12px 28px 28px; min-width:0; overflow-x:hidden; }
+  .weekday-row{ display:grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap:10px; margin-bottom:10px; }
+  .weekday{ font-size:13px; color: var(--ink-faint); font-weight:600; padding-left:10px; }
+  .grid{ display:grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap:10px; }
   .day-cell{ background: var(--paper); border-radius: var(--radius-md); min-height: 118px; padding: 10px 10px 8px; display:flex; flex-direction:column; gap:6px; cursor:pointer; transition: box-shadow .12s ease; }
   .day-cell:hover{ box-shadow: 0 0 0 2px var(--amber) inset; }
   .day-cell.day-cell-tall{ min-height: 220px; }
@@ -130,7 +130,7 @@
   #app.tv-mode .topbar-actions .hide-tv{ display:none; }
   #app.tv-mode .month-title{ font-size: 52px; }
   #app.tv-mode .brand-title{ font-size: 30px; }
-  #app.tv-mode .weekday{ font-size:17px; }
+  #app.tv-mode .weekday{ font-size:17px; padding-left:14px; }
   #app.tv-mode .day-cell{ min-height: 160px; padding:14px; }
   #app.tv-mode .day-num{ font-size:26px; }
   #app.tv-mode .day-num.today{ width:40px; height:40px; font-size:20px; }
@@ -139,15 +139,15 @@
   #app.tv-mode .cal-wrap{ padding: 16px 40px 40px; }
   #app.tv-mode .month-nav{ padding: 30px 40px 12px; }
   #app.tv-mode .topbar{ padding: 22px 40px; }
-  .content-row{ display:flex; flex:1; min-height:0; }
-  .agenda-panel{ width:340px; flex-shrink:0; border-left:1px solid var(--border); padding:28px 32px; overflow-y:auto; }
+  .content-row{ display:grid; grid-template-columns: minmax(0,1fr); flex:1; min-height:0; overflow:hidden; }
+  .agenda-panel{ min-width:0; border-left:1px solid var(--border); padding:28px 32px; overflow-y:auto; }
   .agenda-heading{ font-family:var(--serif); font-size:20px; font-weight:600; margin:22px 0 14px; }
   .agenda-heading:first-child{ margin-top:0; }
   .agenda-row{ display:flex; align-items:flex-start; gap:10px; margin-bottom:14px; cursor:pointer; }
   .agenda-row .dots{ display:flex; gap:3px; margin-top:6px; flex-shrink:0; }
   .agenda-row-title{ display:block; font-weight:600; font-size:15px; color: var(--ink); }
   .agenda-row-time{ display:block; color:var(--ink-dim); font-size:13px; }
-  #app.tv-mode .agenda-panel{ width:420px; padding:36px 40px; }
+  #app.tv-mode .agenda-panel{ padding:36px 40px; }
   #app.tv-mode .agenda-heading{ font-size:26px; }
   #app.tv-mode .agenda-row-title{ font-size:19px; }
   #app.tv-mode .agenda-row-time{ font-size:15px; }
@@ -757,6 +757,7 @@ function renderCalendarApp(){
 
   var contentRow = document.createElement('div');
   contentRow.className = 'content-row';
+  contentRow.style.gridTemplateColumns = state.tvMode ? 'minmax(0,1fr) 420px' : 'minmax(0,1fr)';
   contentRow.appendChild(calWrap);
   if(state.tvMode){
     contentRow.appendChild(renderAgendaPanel());
