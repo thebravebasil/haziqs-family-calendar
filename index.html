@@ -191,6 +191,17 @@
     .day-agenda-time{ width:80px; }
   }
 </style>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script>
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  OneSignalDeferred.push(async function(OneSignal) {
+    await OneSignal.init({
+      appId: "95202416-f600-4ee2-a45d-161b6427d046",
+      serviceWorkerPath: "OneSignalSDKWorker.js",
+      serviceWorkerParam: { scope: "/haziqs-family-calendar/" }
+    });
+  });
+</script>
 </head>
 <body>
 <div id="app"></div>
@@ -236,6 +247,20 @@ const FAMILY_MEMBERS = [
 const WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const FULL_WEEKDAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+// Proxy that safely forwards notification scheduling to OneSignal (keeps the REST key off this public page).
+const NOTIFY_PROXY_URL = "https://haziq-calendar-notify.mobasil2023.workers.dev";
+const REMINDER_OPTIONS = [
+  { value: '', label: 'No reminder' },
+  { value: '0', label: 'At start time' },
+  { value: '5', label: '5 minutes before' },
+  { value: '10', label: '10 minutes before' },
+  { value: '15', label: '15 minutes before' },
+  { value: '30', label: '30 minutes before' },
+  { value: '60', label: '1 hour before' },
+  { value: '1440', label: '1 day before' }
+];
+const NOTIFY_PREFS_KEY = 'haziqCalendarNotifyPersonIds';
 
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
@@ -432,6 +457,87 @@ function doSignIn(){
   });
 }
 function doSignOut(){ signOut(auth); }
+
+// ---------------- Push notifications (OneSignal via Cloudflare Worker proxy) ----------------
+function withOneSignal(fn){
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  window.OneSignalDeferred.push(fn);
+}
+function getNotifyPersonIds(){
+  try{
+    var raw = localStorage.getItem(NOTIFY_PREFS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch(e){ return []; }
+}
+function saveNotifyPersonIds(ids){
+  try{ localStorage.setItem(NOTIFY_PREFS_KEY, JSON.stringify(ids)); } catch(e){}
+}
+function applyNotifyTags(selectedIds){
+  withOneSignal(async function(OneSignal){
+    try{ await OneSignal.Notifications.requestPermission(); } catch(e){}
+    FAMILY_MEMBERS.forEach(function(m){
+      try{
+        if(selectedIds.indexOf(m.id) > -1) OneSignal.User.addTag('person_' + m.id, 'true');
+        else OneSignal.User.removeTag('person_' + m.id);
+      } catch(e){}
+    });
+  });
+  saveNotifyPersonIds(selectedIds);
+}
+
+function localDateTimeFor(ds, timeStr){
+  var d = parseISO(ds);
+  var y = d.getUTCFullYear(), mo = d.getUTCMonth(), day = d.getUTCDate();
+  var hh = 0, mm = 0;
+  if(timeStr){ var p = timeStr.split(':'); hh = parseInt(p[0],10); mm = parseInt(p[1],10); }
+  return new Date(y, mo, day, hh, mm, 0, 0);
+}
+
+function reminderFilters(personIds){
+  var filters = [];
+  personIds.forEach(function(pid, idx){
+    if(idx > 0) filters.push({ operator: 'OR' });
+    filters.push({ field: 'tag', key: 'person_' + pid, relation: '=', value: 'true' });
+  });
+  return filters;
+}
+
+function scheduleReminders(ev){
+  if(ev.allDay || !ev.time || !ev.reminderMinutes && ev.reminderMinutes !== 0) return Promise.resolve([]);
+  if(!ev.personIds || !ev.personIds.length) return Promise.resolve([]);
+  var todayD = parseISO(todayStr());
+  var rangeEnd = addDays(todayD, 60);
+  var occDates = expandOccurrences(ev, todayD, rangeEnd).slice(0, 20);
+  var now = new Date();
+  var jobs = [];
+  occDates.forEach(function(ds){
+    var startDt = localDateTimeFor(ds, ev.time);
+    var fireAt = new Date(startDt.getTime() - ev.reminderMinutes * 60000);
+    if(fireAt <= now) return; // don't schedule reminders in the past
+    var body = {
+      contents: { en: (ev.allDay ? '' : formatTime12h(ev.time) + ' \u2013 ') + ev.title },
+      headings: { en: 'Reminder' },
+      send_after: fireAt.toISOString(),
+      filters: reminderFilters(ev.personIds)
+    };
+    jobs.push(
+      fetch(NOTIFY_PROXY_URL + '/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      }).then(function(r){ return r.json(); }).then(function(data){ return data && data.id; }).catch(function(){ return null; })
+    );
+  });
+  return Promise.all(jobs).then(function(ids){ return ids.filter(Boolean); });
+}
+
+function cancelReminders(ev){
+  var ids = ev && ev.oneSignalNotificationIds;
+  if(!ids || !ids.length) return Promise.resolve();
+  return Promise.all(ids.map(function(id){
+    return fetch(NOTIFY_PROXY_URL + '/cancel/' + encodeURIComponent(id), { method: 'DELETE' }).catch(function(){});
+  }));
+}
 
 // ---------------- Dialogs (replaces native confirm/alert) ----------------
 function showConfirm(message, onConfirm, opts){
@@ -656,6 +762,7 @@ function renderCalendarApp(){
     '<div class="topbar-actions">' +
       '<div class="legend hide-tv">'+legendHtml+'</div>' +
       '<button class="btn hide-tv" id="btn-search">Search</button>' +
+      '<button class="btn hide-tv" id="btn-notify">Notifications</button>' +
       '<button class="btn hide-tv" id="btn-people">Family</button>' +
       '<button class="btn btn-primary hide-tv" id="btn-add">+ Add event</button>' +
       '<button class="btn" id="btn-tv">'+(state.tvMode ? 'Exit TV mode' : 'TV mode')+'</button>' +
@@ -771,6 +878,7 @@ function renderCalendarApp(){
     var b;
     if((b = topbar.querySelector('#btn-add'))) b.addEventListener('click', function(){ openEventModal(defaultAddDate, null); });
     if((b = topbar.querySelector('#btn-people'))) b.addEventListener('click', openPeopleModal);
+    if((b = topbar.querySelector('#btn-notify'))) b.addEventListener('click', openNotifyModal);
     if((b = topbar.querySelector('#btn-search'))) b.addEventListener('click', openSearchModal);
     if((b = topbar.querySelector('#btn-tv'))) b.addEventListener('click', function(){ state.tvMode = !state.tvMode; render(); });
     if((b = topbar.querySelector('#btn-signout'))) b.addEventListener('click', doSignOut);
@@ -802,6 +910,7 @@ function openDayModal(ds){ state.modal = { type: 'day', date: ds }; render(); }
 function openViewModal(ds, ev){ state.modal = { type: 'view', date: ds, event: ev }; render(); }
 function openEventModal(ds, existingEvent){ state.modal = { type: 'event', date: ds, event: existingEvent }; render(); }
 function openPeopleModal(){ state.modal = { type: 'people' }; render(); }
+function openNotifyModal(){ state.modal = { type: 'notify' }; render(); }
 function openSearchModal(){ state.modal = { type: 'search' }; render(); }
 function closeModal(){ state.modal = null; render(); }
 
@@ -814,6 +923,7 @@ function renderModal(){
   overlay.appendChild(modal);
   if(state.modal.type === 'day') buildDayModal(modal, state.modal.date);
   else if(state.modal.type === 'people') buildPeopleModal(modal);
+  else if(state.modal.type === 'notify') buildNotifyModal(modal);
   else if(state.modal.type === 'color') buildColorModal(modal);
   else if(state.modal.type === 'view') buildViewModal(modal, state.modal.date, state.modal.event);
   else if(state.modal.type === 'search') buildSearchModal(modal);
@@ -925,6 +1035,40 @@ function buildPeopleModal(modal){
   closeRow.querySelector('#pm-close').addEventListener('click', closeModal);
 }
 
+function buildNotifyModal(modal){
+  var supported = typeof window.Notification !== 'undefined';
+  var selected = getNotifyPersonIds();
+  modal.innerHTML =
+    '<h3 class="modal-title">Notifications on this device</h3>' +
+    '<p style="font-size:13px;color:var(--ink-dim);margin:-10px 0 18px;line-height:1.5;">Pick which names you want reminders for when you\'re using the calendar on this device or browser. Reminders are set per event on the event form.</p>' +
+    (supported ? '' : '<p class="gate-error" style="margin:0 0 16px;">This browser doesn\'t support push notifications. On iPhone, add this page to your Home Screen first (Safari \u2192 Share \u2192 Add to Home Screen), then open it from there.</p>');
+  var pillRow = document.createElement('div');
+  pillRow.className = 'person-pill-row';
+  FAMILY_MEMBERS.forEach(function(m){
+    var pill = document.createElement('div');
+    pill.className = 'person-pill' + (selected.indexOf(m.id) > -1 ? ' selected' : '');
+    var p = personById(m.id) || m;
+    pill.innerHTML = '<span class="dot" style="background:'+p.color+'"></span>'+esc(m.name);
+    pill.addEventListener('click', function(){
+      var idx = selected.indexOf(m.id);
+      if(idx > -1) selected.splice(idx,1); else selected.push(m.id);
+      pill.classList.toggle('selected');
+    });
+    pillRow.appendChild(pill);
+  });
+  modal.appendChild(pillRow);
+
+  var actions = document.createElement('div');
+  actions.className = 'modal-actions';
+  actions.innerHTML = '<div></div><div class="modal-actions-right"><button class="btn" id="nm-close">Close</button><button class="btn btn-primary" id="nm-save">Save</button></div>';
+  modal.appendChild(actions);
+  actions.querySelector('#nm-close').addEventListener('click', closeModal);
+  actions.querySelector('#nm-save').addEventListener('click', function(){
+    applyNotifyTags(selected);
+    closeModal();
+  });
+}
+
 function buildColorModal(modal){
   var personId = state.modal.personId;
   var p = personById(personId);
@@ -1012,6 +1156,12 @@ function buildEventModal(modal, ds, existing){
       '<div><label class="field-label">End time (optional)</label><input class="field" id="em-endtime" type="time"></div>' +
     '</div>' +
     '<div class="checkbox-row"><input type="checkbox" id="em-allday"><label for="em-allday">All day</label></div>' +
+    '<div id="em-reminder-wrap">' +
+      '<label class="field-label">Reminder</label>' +
+      '<select class="field" id="em-reminder">' +
+        REMINDER_OPTIONS.map(function(o){ return '<option value="'+o.value+'">'+esc(o.label)+'</option>'; }).join('') +
+      '</select>' +
+    '</div>' +
     '<label class="field-label">Who\'s this for</label>' +
     '<div class="person-pill-row" id="em-people"></div>' +
     '<label class="field-label">Repeats</label>' +
@@ -1039,6 +1189,7 @@ function buildEventModal(modal, ds, existing){
   form.querySelector('#em-endtime').value = isEdit ? (existing.endTime || '') : '';
   form.querySelector('#em-allday').checked = isEdit ? !!existing.allDay : true;
   form.querySelector('#em-notes').value = isEdit ? (existing.notes || '') : '';
+  form.querySelector('#em-reminder').value = isEdit && (existing.reminderMinutes || existing.reminderMinutes === 0) ? String(existing.reminderMinutes) : '';
   var recFreq = isEdit && existing.recurrence ? existing.recurrence.freq : 'none';
   form.querySelector('#em-freq').value = recFreq;
   form.querySelector('#em-interval').value = isEdit && existing.recurrence ? (existing.recurrence.interval || 1) : 1;
@@ -1046,9 +1197,11 @@ function buildEventModal(modal, ds, existing){
 
   var timeField = form.querySelector('#em-time');
   var endTimeWrap = form.querySelector('#em-endtime-wrap');
+  var reminderWrap = form.querySelector('#em-reminder-wrap');
   function syncTimeVisibility(hidden){
     timeField.style.display = hidden ? 'none' : 'block';
     endTimeWrap.style.display = hidden ? 'none' : 'grid';
+    reminderWrap.style.display = hidden ? 'none' : 'block';
   }
   syncTimeVisibility(form.querySelector('#em-allday').checked);
   form.querySelector('#em-allday').addEventListener('change', function(e){ syncTimeVisibility(e.target.checked); });
@@ -1082,10 +1235,10 @@ function buildEventModal(modal, ds, existing){
       showConfirm('Delete this event?', function(){
         if(existing.recurrence && existing.recurrence.freq !== 'none'){
           showConfirm('This repeats. Delete the whole series?', function(){
-            deleteDoc(doc(db, 'events', existing.id)).then(closeModal);
+            cancelReminders(existing).then(function(){ return deleteDoc(doc(db, 'events', existing.id)); }).then(closeModal);
           }, { danger: true, confirmLabel: 'Delete series' });
         } else {
-          deleteDoc(doc(db, 'events', existing.id)).then(closeModal);
+          cancelReminders(existing).then(function(){ return deleteDoc(doc(db, 'events', existing.id)); }).then(closeModal);
         }
       }, { danger: true, confirmLabel: 'Delete' });
     });
@@ -1108,16 +1261,27 @@ function buildEventModal(modal, ds, existing){
     var freq = form.querySelector('#em-freq').value;
     var interval = parseInt(form.querySelector('#em-interval').value, 10) || 1;
     var until = form.querySelector('#em-until').value || null;
+    var remRaw = form.querySelector('#em-reminder').value;
+    var reminderMinutes = (ad || remRaw === '') ? null : parseInt(remRaw, 10);
 
     var evObj = {
       title: t, date: dt, allDay: ad, time: ad ? '' : tm, endTime: ad ? '' : etm, notes: nt,
       personIds: selected,
       recurrence: freq === 'none' ? { freq: 'none' } : { freq: freq, interval: interval, until: until },
+      reminderMinutes: reminderMinutes,
+      oneSignalNotificationIds: [],
       createdBy: state.user.uid
     };
 
-    var p = isEdit ? updateDoc(doc(db, 'events', existing.id), evObj) : addDoc(collection(db, 'events'), evObj);
-    p.then(closeModal).catch(function(err){
+    var cancelOld = isEdit ? cancelReminders(existing).catch(function(){}) : Promise.resolve();
+    cancelOld.then(function(){
+      return isEdit ? updateDoc(doc(db, 'events', existing.id), evObj) : addDoc(collection(db, 'events'), evObj);
+    }).then(function(refOrVoid){
+      var eventId = isEdit ? existing.id : refOrVoid.id;
+      return scheduleReminders(evObj).catch(function(){ return []; }).then(function(ids){
+        if(ids.length) return updateDoc(doc(db, 'events', eventId), { oneSignalNotificationIds: ids });
+      });
+    }).then(closeModal).catch(function(err){
       errEl.textContent = "Couldn't save (" + (err && err.code ? err.code : 'error') + "). Try again.";
       errEl.style.display = 'block';
     });
